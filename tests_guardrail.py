@@ -82,3 +82,23 @@ def test_quote_shape_from_raw(monkeypatch_free=True):
         assert q["price_impact_pct"] == 0.0001
     finally:
         solana._get = orig
+
+
+def _run_all() -> int:
+    import sys
+    ok = fail = 0
+    names = [n for n, v in list(globals().items()) if n.startswith("test_") and callable(v)]
+    for name in sorted(names):
+        try:
+            globals()[name]()
+            ok += 1
+        except Exception as e:  # noqa: BLE001
+            fail += 1
+            print(f"FAIL {name}: {e}")
+    print(f"{ok} passed, {fail} failed")
+    return 1 if fail else 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(_run_all())
