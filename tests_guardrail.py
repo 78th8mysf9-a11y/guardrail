@@ -59,3 +59,26 @@ def test_ledger_hash_chain_detects_tampering():
 
 def test_summary():
     assert "position" in summary(Policy())
+
+
+# ---- Solana adapter（离线：只测换算与报价结构，不打网络） ----
+def test_lamports_conversion():
+    from guardrail.solana import lamports
+    assert lamports(1, "SOL") == 1_000_000_000
+    assert lamports(0.5, "USDC") == 500_000
+    assert lamports(0.088580331, "SOL") == 88_580_331
+
+def test_quote_shape_from_raw(monkeypatch_free=True):
+    from guardrail import solana
+    fake = {"inAmount": "3000000", "outAmount": "42433469",
+            "priceImpactPct": "0.0001", "routePlan": [{}, {}]}
+    orig = solana._get
+    solana._get = lambda *a, **k: fake
+    try:
+        q = solana.quote("USDT", "SOL", 3)
+        assert abs(q["in_amount"] - 3.0) < 1e-9
+        assert abs(q["out_amount"] - 0.042433469) < 1e-9
+        assert q["routes"] == 2
+        assert q["price_impact_pct"] == 0.0001
+    finally:
+        solana._get = orig

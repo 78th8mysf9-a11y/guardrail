@@ -7,6 +7,7 @@ import json
 import sys
 
 from guardrail import AccountState, Ledger, Order, Policy, check_order, summary
+from guardrail.solana import quote
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,7 +30,30 @@ def main(argv: list[str] | None = None) -> int:
     v = sub.add_parser("verify-ledger", help="check the hash chain of a ledger file")
     v.add_argument("--db", default="guardrail.db")
 
+    sw = sub.add_parser("swap-check", help="gate a proposed swap, then price it with Jupiter")
+    sw.add_argument("--from-asset", default="USDT")
+    sw.add_argument("--max-position-pct", type=float, default=0.20)
+    sw.add_argument("--max-asset-pct", type=float, default=0.10)
+    sw.add_argument("--to-asset", default="SOL")
+    sw.add_argument("--notional", type=float, required=True)
+    sw.add_argument("--equity", type=float, required=True)
+    sw.add_argument("--cash", type=float, required=True)
+    sw.add_argument("--realized-today", type=float, default=0.0)
+
     args = ap.parse_args(argv)
+
+    if args.cmd == "swap-check":
+        policy = Policy(max_position_pct=args.max_position_pct, max_asset_pct=args.max_asset_pct)
+        acct = AccountState(equity_usdt=args.equity, cash_usdt=args.cash,
+                            realized_pnl_today=args.realized_today)
+        verdict = check_order(policy, acct, Order(args.to_asset, "buy", args.notional))
+        out = {"guard": {"decision": verdict.decision, "reason": verdict.reason,
+                         "detail": verdict.detail}}
+        if verdict.decision == "allow":
+            q = quote(args.from_asset, args.to_asset, args.notional)
+            out["quote"] = {k: v for k, v in q.items() if k != "raw"}
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0 if verdict.decision == "allow" else 1
 
     if args.cmd == "policy":
         print(summary(Policy()))
